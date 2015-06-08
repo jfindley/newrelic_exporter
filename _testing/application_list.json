@@ -1,0 +1,56 @@
+{
+  "applications": [
+    {
+      "id": 9045822,
+      "name": "Test/Client/Name",
+      "language": "ruby",
+      "health_status": "green",
+      "reporting": true,
+      "last_reported_at": "2015-06-08T14:44:26+00:00",
+      "application_summary": {
+        "response_time": 441,
+        "throughput": 54.7,
+        "error_rate": 0,
+        "apdex_target": 0.5,
+        "apdex_score": 0.84,
+        "host_count": 3,
+        "instance_count": 30
+      },
+      "end_user_summary": {
+        "response_time": 4.61,
+        "throughput": 7,
+        "apdex_target": 7,
+        "apdex_score": 0.91
+      },
+      "settings": {
+        "app_apdex_threshold": 0.5,
+        "end_user_apdex_threshold": 7,
+        "enable_real_user_monitoring": true,
+        "use_server_side_config": false
+      },
+      "links": {
+        "application_instances": [
+          9340582,
+          2389402,
+          9083452
+        ],
+        "alert_policy": 362921,
+        "servers": [],
+        "application_hosts": [
+          2903402,
+          3490824,
+          9090823
+        ]
+      }
+    }
+  ],
+  "links": {
+    "application.servers": "/v2/servers?ids={server_ids}",
+    "application.server": "/v2/servers/{server_id}",
+    "application.application_hosts": "/v2/application/{application_id}/hosts?ids={host_ids}",
+    "application.application_host": "/v2/application/{application_id}/hosts/{host_id}",
+    "application.application_instances": "/v2/application/{application_id}/instances?ids={instance_ids}",
+    "application.application_instance": "/v2/application/{application_id}/instances/{instance_id}",
+    "application.alert_policy": "/v2/alert_policies/{alert_policy_id}"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "metrics": [
+    {
+      "name": "Datastore/statement/JDBC/messages/insert",
+      "values": [
+        "average_response_time",
+        "calls_per_minute",
+        "call_count",
+        "min_response_time",
+        "max_response_time",
+        "average_exclusive_time",
+        "average_value",
+        "total_call_time_per_minute",
+        "requests_per_minute",
+        "standard_deviation"
+      ]
+    }
+  ]
+}

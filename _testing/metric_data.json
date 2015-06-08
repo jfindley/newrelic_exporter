@@ -1,0 +1,29 @@
+{
+  "metric_data": {
+    "from": "2015-06-08T15:35:00+00:00",
+    "to": "2015-06-08T15:36:00+00:00",
+    "metrics": [
+      {
+        "name": "Agent/MetricsReported/count",
+        "timeslices": [
+          {
+            "from": "2015-06-08T15:35:00+00:00",
+            "to": "2015-06-08T15:36:00+00:00",
+            "values": {
+              "average_response_time": 200,
+              "calls_per_minute": 2.03,
+              "call_count": 2,
+              "min_response_time": 91,
+              "max_response_time": 291,
+              "average_exclusive_time": 200,
+              "average_value": 0.2,
+              "total_call_time_per_minute": 0.405,
+              "requests_per_minute": 2.03,
+              "standard_deviation": 74.6
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
