@@ -176,7 +176,6 @@ func testServer() (ts *httptest.Server, err error) {
 			}
 
 		default:
-			println(r.URL.Path)
 			w.WriteHeader(404)
 			return
 
