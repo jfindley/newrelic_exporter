@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 
 var testApiKey string = "205071e37e95bdaa327c62ccd3201da9289ccd17"
 var testApiAppId int = 9045822
+var testPostData string = "names[]=Datastore%2Fstatement%2FJDBC%2Fmessages%2Finsert&raw=true&summarize=true&period=0&from=0001-01-01T00:00:00Z&to=0001-01-01T00:00:00Z"
 
 func TestAppListGet(t *testing.T) {
 
@@ -22,7 +24,7 @@ func TestAppListGet(t *testing.T) {
 	var api newRelicApi
 
 	api.server = ts.URL
-	api.apikey = testApiKey
+	api.apiKey = testApiKey
 
 	var app AppList
 
@@ -48,10 +50,13 @@ func TestAppListGet(t *testing.T) {
 	case a.Name != "Test/Client/Name":
 		t.Fatal("Wrong name")
 
-	case a.AppSummary.Throughput != 54.7:
+	case a.AppSummary["throughput"] != 54.7:
 		t.Fatal("Wrong throughput")
 
-	case a.UsrSummary.ResponseTime != 4.61:
+	case a.AppSummary["host_count"] != 3:
+		t.Fatal("Wrong host count")
+
+	case a.UsrSummary["response_time"] != 4.61:
 		t.Fatal("Wrong response time")
 
 	}
@@ -70,7 +75,7 @@ func TestMetricNamesGet(t *testing.T) {
 	var api newRelicApi
 
 	api.server = ts.URL
-	api.apikey = testApiKey
+	api.apiKey = testApiKey
 
 	var names MetricNames
 
@@ -105,9 +110,9 @@ func TestMetricValuesGet(t *testing.T) {
 	var api newRelicApi
 
 	api.server = ts.URL
-	api.apikey = testApiKey
+	api.apiKey = testApiKey
 
-	var values MetricData
+	var data MetricData
 	var names MetricNames
 
 	err = names.get(api, testApiAppId)
@@ -115,32 +120,62 @@ func TestMetricValuesGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = values.get(api, testApiAppId, names)
+	err = data.get(api, testApiAppId, names)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(values.Metric_Data.Metrics) != 1 {
+	if len(data.Metric_Data.Metrics) != 1 {
 		t.Fatal("Expected 1 metric set")
 	}
 
-	if len(values.Metric_Data.Metrics[0].Timeslices) != 1 {
+	if len(data.Metric_Data.Metrics[0].Timeslices) != 1 {
 		t.Fatal("Expected 1 timeslice")
 	}
 
-	appData := values.Metric_Data.Metrics[0].Timeslices[0]
+	appData := data.Metric_Data.Metrics[0].Timeslices[0]
 
 	if len(appData.Values) != 10 {
 		t.Fatal("Expected 10 data points")
 	}
 
-	if appData.Values["call_count"] != 2 {
+	if appData.Values["call_count"].(float64) != 2 {
 		t.Fatal("Wrong call_count value")
 	}
 
-	if appData.Values["calls_per_minute"] != 2.03 {
+	if appData.Values["calls_per_minute"].(float64) != 2.03 {
 		t.Fatal("Wrong calls_per_minute value")
 	}
+
+}
+
+func TestFindMetrics(t *testing.T) {
+
+	ts, err := testServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ts.Close()
+
+	var api newRelicApi
+
+	var recieved []string
+
+	api.server = ts.URL
+	api.apiKey = testApiKey
+
+	metrics := make(chan prometheus.Metric)
+
+	go FindMetrics(api, metrics)
+
+	for m := range metrics {
+
+		recieved = append(recieved, m.Desc().String())
+
+	}
+
+	// t.Fatal(recieved)
 
 }
 
