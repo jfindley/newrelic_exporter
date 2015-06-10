@@ -307,6 +307,10 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 
 	e.recieve(metricChan)
 
+	ch <- e.duration
+	ch <- e.totalScrapes
+	ch <- e.error
+
 	for _, m := range e.metrics {
 		m.Collect(ch)
 	}
@@ -367,7 +371,7 @@ func main() {
 	flag.StringVar(&exporter.api.server, "api.server", "https://api.newrelic.com", "NewRelic API URL")
 	flag.IntVar(&exporter.api.period, "api.period", 60, "Period of data to extract in seconds")
 
-	flag.StringVar(&listenAddress, "web.listen-address", ":9104", "Address to listen on for web interface and telemetry.")
+	flag.StringVar(&listenAddress, "web.listen-address", ":9126", "Address to listen on for web interface and telemetry.")
 	flag.StringVar(&metricPath, "web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 
 	flag.Parse()
