@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -149,7 +148,7 @@ func TestMetricValuesGet(t *testing.T) {
 
 }
 
-func TestFindMetrics(t *testing.T) {
+func TestScrapeAPI(t *testing.T) {
 
 	ts, err := testServer()
 	if err != nil {
@@ -158,24 +157,24 @@ func TestFindMetrics(t *testing.T) {
 
 	defer ts.Close()
 
-	var api newRelicApi
+	exporter := NewExporter()
 
-	var recieved []string
+	var recieved []Metric
 
-	api.server = ts.URL
-	api.apiKey = testApiKey
+	exporter.api.server = ts.URL
+	exporter.api.apiKey = testApiKey
 
-	metrics := make(chan prometheus.Metric)
+	metrics := make(chan Metric)
 
-	go FindMetrics(api, metrics)
+	go exporter.scrape(metrics)
 
 	for m := range metrics {
-
-		recieved = append(recieved, m.Desc().String())
-
+		recieved = append(recieved, m)
 	}
 
-	// t.Fatal(recieved)
+	if len(recieved) != 21 {
+		t.Fatal("Expected 21 metrics")
+	}
 
 }
 
