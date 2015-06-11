@@ -21,6 +21,7 @@ const APIHDR = "X-Api-Key"
 // Chunk size of metric requests
 const CHUNKSIZE = 10
 
+// Namespace for metrics
 const NAMESPACE = "newrelic"
 
 // This is to support skipping verification for testing and
