@@ -126,9 +126,12 @@ func (m *MetricData) get(api newRelicApi, appId int, names MetricNames) error {
 	// we have to process this in chunks, to ensure the response
 	// fits within a single request.
 
+	chans := make([]chan MetricData, 0)
+
 	for i := 0; i < len(nameList); i += CHUNKSIZE {
 
-		var thisData MetricData
+		chans = append(chans, make(chan MetricData))
+
 		var thisList []string
 
 		if i+CHUNKSIZE > len(nameList) {
@@ -137,33 +140,48 @@ func (m *MetricData) get(api newRelicApi, appId int, names MetricNames) error {
 			thisList = nameList[i : i+CHUNKSIZE]
 		}
 
-		params := url.Values{}
+		go func(names []string, ch chan<- MetricData) {
 
-		for _, thisName := range thisList {
-			params.Add("names[]", thisName)
-		}
+			var data MetricData
 
-		params.Add("raw", "true")
-		params.Add("summarize", "true")
-		params.Add("period", strconv.Itoa(api.period))
-		params.Add("from", api.from.Format(time.RFC3339))
-		params.Add("to", api.to.Format(time.RFC3339))
+			params := url.Values{}
 
-		body, err := api.req(path, params.Encode())
-		if err != nil {
-			return err
-		}
+			for _, thisName := range thisList {
+				params.Add("names[]", thisName)
+			}
 
-		// We ignore unmarshal errors as we don't want to abort if a single
-		// metric is broken, and there's currently no sensible way of
-		// communicating useful information back to the user from here.
-		json.Unmarshal(body, &thisData)
+			params.Add("raw", "true")
+			params.Add("summarize", "true")
+			params.Add("period", strconv.Itoa(api.period))
+			params.Add("from", api.from.Format(time.RFC3339))
+			params.Add("to", api.to.Format(time.RFC3339))
 
-		allData := m.Metric_Data.Metrics
-		allData = append(allData, thisData.Metric_Data.Metrics...)
-		m.Metric_Data.Metrics = allData
+			body, err := api.req(path, params.Encode())
+			if err != nil {
+				close(ch)
+				return
+			}
+
+			err = json.Unmarshal(body, &data)
+			if err != nil {
+				close(ch)
+				return
+			}
+
+			ch <- data
+			close(ch)
+
+		}(thisList, chans[len(chans)-1])
 
 	}
+
+	allData := m.Metric_Data.Metrics
+
+	for _, ch := range chans {
+		m := <-ch
+		allData = append(allData, m.Metric_Data.Metrics...)
+	}
+	m.Metric_Data.Metrics = allData
 
 	return nil
 }
