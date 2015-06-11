@@ -5,7 +5,7 @@ Requires a New Relic account.
 
 ## Building and running
 
-    go build
+    make
     ./newrelic_exporter <flags>
 
 ### Flags
