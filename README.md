@@ -5,10 +5,18 @@ Requires a New Relic account.
 
 ## Building and running
 
-    make
-    ./newrelic_exporter <flags>
+### Running in a container
 
-### Flags
+	docker run jfindley/newrelic-exporter
+
+### From source
+
+	git clone https://github.com/jfindley/newrelic_exporter.git --branch release
+	cd newrelic_exporter
+    make
+    ./newrelic_exporter
+
+## Flags
 
 Name               | Description
 -------------------|------------
