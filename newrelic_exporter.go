@@ -1,5 +1,7 @@
 package main
 
+// TODO: implement JSON parser that loops through the output from api.Get()
+
 import (
 	"crypto/tls"
 	"encoding/json"
@@ -8,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -15,18 +18,26 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Header to set for API auth
-const APIHDR = "X-Api-Key"
-
 // Chunk size of metric requests
-const CHUNKSIZE = 10
+const ChunkSize = 10
 
 // Namespace for metrics
-const NAMESPACE = "newrelic"
+const NameSpace = "newrelic"
+
+// User-Agent string
+const UserAgent = "NewRelic Exporter"
 
 // This is to support skipping verification for testing and
 // is deliberately not exposed to the user
-var TLSIGNORE bool = false
+var TlsIgnore bool = false
+
+// Regular expression to parse Link headers
+var rexp = `<([[:graph:]]+)>; rel="next", <([[:graph:]]+)>; rel="last"`
+var LinkRexp *regexp.Regexp
+
+func init() {
+	LinkRexp = regexp.MustCompile(rexp)
+}
 
 type Metric struct {
 	App   string
@@ -128,16 +139,16 @@ func (m *MetricData) get(api newRelicApi, appId int, names MetricNames) error {
 
 	chans := make([]chan MetricData, 0)
 
-	for i := 0; i < len(nameList); i += CHUNKSIZE {
+	for i := 0; i < len(nameList); i += ChunkSize {
 
 		chans = append(chans, make(chan MetricData))
 
 		var thisList []string
 
-		if i+CHUNKSIZE > len(nameList) {
+		if i+ChunkSize > len(nameList) {
 			thisList = nameList[i:]
 		} else {
-			thisList = nameList[i : i+CHUNKSIZE]
+			thisList = nameList[i : i+ChunkSize]
 		}
 
 		go func(names []string, ch chan<- MetricData) {
@@ -222,17 +233,17 @@ type Exporter struct {
 func NewExporter() *Exporter {
 	return &Exporter{
 		duration: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: NAMESPACE,
+			Namespace: NameSpace,
 			Name:      "exporter_last_scrape_duration_seconds",
 			Help:      "The last scrape duration.",
 		}),
 		totalScrapes: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: NAMESPACE,
+			Namespace: NameSpace,
 			Name:      "exporter_scrapes_total",
 			Help:      "Total scraped metrics",
 		}),
 		error: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: NAMESPACE,
+			Namespace: NameSpace,
 			Name:      "exporter_last_scrape_error",
 			Help:      "The last scrape error status.",
 		}),
@@ -282,14 +293,14 @@ func (e *Exporter) scrape(ch chan<- Metric) {
 func (e *Exporter) recieve(ch <-chan Metric) {
 
 	for metric := range ch {
-		id := fmt.Sprintf("%s_%s_%s", NAMESPACE, metric.App, metric.Name)
+		id := fmt.Sprintf("%s_%s_%s", NameSpace, metric.App, metric.Name)
 
 		if m, ok := e.metrics[id]; ok {
 			m.WithLabelValues(metric.Label).Set(metric.Value)
 		} else {
 			g := prometheus.NewGaugeVec(
 				prometheus.GaugeOpts{
-					Namespace: NAMESPACE,
+					Namespace: NameSpace,
 					Subsystem: metric.App,
 					Name:      metric.Name,
 				},
@@ -343,40 +354,71 @@ type newRelicApi struct {
 	period int
 }
 
-func (a *newRelicApi) req(path string, data string) ([]byte, error) {
+func (a *newRelicApi) req(path string, params string) ([]byte, error) {
 
-	u := fmt.Sprintf("%s%s?%s", a.server, path, data)
-
-	req, err := http.NewRequest("GET", u, nil)
+	u, err := url.Parse(a.server)
 	if err != nil {
 		return nil, err
+	}
+	u.Path = path
+	u.RawQuery = params
+
+	req := &http.Request{
+		Method: "GET",
+		URL:    u,
+		Header: http.Header{
+			"User-Agent": {UserAgent},
+			"X-Api-Key":  {a.apiKey},
+		},
 	}
 
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: TLSIGNORE,
+				InsecureSkipVerify: TlsIgnore,
 			},
 		},
 	}
 
-	req.Header.Set(APIHDR, a.apiKey)
+	var data []byte
+	pageCount := 1
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	for page := 1; page <= pageCount; page++ {
+		fmt.Println("page", page)
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("Bad response code: %s", resp.Status)
+		}
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		resp.Body.Close()
+		data = append(data, body...)
+
+		link := resp.Header.Get("Link")
+		vals := LinkRexp.FindStringSubmatch(link)
+
+		if len(vals) == 3 { // Full string plus two sub-expressions
+			u, err := url.Parse(vals[2]) // Parse the second URL
+			if err != nil {
+				return nil, err
+			}
+			pageCount, err = strconv.Atoi(u.Query().Get("page"))
+			fmt.Println("total pages:", pageCount)
+			if err != nil {
+				return nil, err
+			}
+		}
+		u.Query().Set("page", strconv.Itoa(page+1))
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Bad response code: %s", resp.Status)
-	}
-
-	return body, nil
+	return data, nil
 
 }
 

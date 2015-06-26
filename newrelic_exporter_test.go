@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -83,8 +84,10 @@ func TestMetricNamesGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(names.Metrics) != 1 {
-		t.Fatal("Expected one name set")
+	t.Error(names)
+
+	if len(names.Metrics) != 2 {
+		t.Fatal("Expected 2 name sets")
 	}
 
 	if len(names.Metrics[0].Values) != 10 {
@@ -92,6 +95,9 @@ func TestMetricNamesGet(t *testing.T) {
 	}
 
 	if names.Metrics[0].Name != "Datastore/statement/JDBC/messages/insert" {
+		t.Fatal("Wrong application name")
+	}
+	if names.Metrics[1].Name != "Datastore/statement/JDBC/messages/update" {
 		t.Fatal("Wrong application name")
 	}
 
@@ -124,8 +130,8 @@ func TestMetricValuesGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(data.Metric_Data.Metrics) != 1 {
-		t.Fatal("Expected 1 metric set")
+	if len(data.Metric_Data.Metrics) != 2 {
+		t.Fatal("Expected 2 metric sets")
 	}
 
 	if len(data.Metric_Data.Metrics[0].Timeslices) != 1 {
@@ -179,40 +185,59 @@ func TestScrapeAPI(t *testing.T) {
 }
 
 func testServer() (ts *httptest.Server, err error) {
-	TLSIGNORE = true
+	TlsIgnore = true
 
 	ts = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		if r.Header.Get(APIHDR) != testApiKey {
+		if r.Header.Get("X-Api-Key") != testApiKey {
 			w.WriteHeader(403)
 		}
 
 		var body []byte
+		var sourceFile string
+
+		firstLink := fmt.Sprintf(
+			"<https://%s%s?page=%d>; rel=%s, <https://%s%s?page=%d>; rel=%s",
+			ts.URL, r.URL.Path, 2, `"next"`,
+			ts.URL, r.URL.Path, 2, `"last"`)
+
+		secondLink := fmt.Sprintf(
+			"<https://%s%s?page=%d>; rel=%s, <https://%s%s?page=%d>; rel=%s",
+			ts.URL, r.URL.Path, 1, `"first"`,
+			ts.URL, r.URL.Path, 1, `"prev"`)
 
 		switch r.URL.Path {
 
 		case "/v2/applications.json":
-			body, err = ioutil.ReadFile("_testing/application_list.json")
-			if err != nil {
-				return
-			}
+			sourceFile = "_testing/application_list.json"
 
 		case "/v2/applications/9045822/metrics.json":
-			body, err = ioutil.ReadFile("_testing/metric_names.json")
-			if err != nil {
-				return
+			if r.URL.Query().Get("page") == "2" {
+				sourceFile = ("_testing/metric_names_2.json")
+				w.Header().Set("Link", secondLink)
+			} else {
+				sourceFile = ("_testing/metric_names.json")
+				w.Header().Set("Link", firstLink)
 			}
 
 		case "/v2/applications/9045822/metrics/data.json":
-			body, err = ioutil.ReadFile("_testing/metric_data.json")
-			if err != nil {
-				return
+			if r.URL.Query().Get("page") == "2" {
+				sourceFile = ("_testing/metric_data_2.json")
+				w.Header().Set("Link", secondLink)
+			} else {
+				sourceFile = ("_testing/metric_data.json")
+				w.Header().Set("Link", firstLink)
 			}
 
 		default:
 			w.WriteHeader(404)
 			return
 
+		}
+
+		body, err = ioutil.ReadFile(sourceFile)
+		if err != nil {
+			return
 		}
 
 		w.WriteHeader(200)
