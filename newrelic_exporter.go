@@ -3,10 +3,12 @@ package main
 // TODO: implement JSON parser that loops through the output from api.Get()
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -106,7 +108,20 @@ func (m *MetricNames) get(api newRelicApi, appId int) error {
 		return err
 	}
 
-	return json.Unmarshal(body, m)
+	dec := json.NewDecoder(bytes.NewReader(body))
+
+	for {
+		var part MetricNames
+		if err = dec.Decode(&part); err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+		tmpMetrics := append(m.Metrics, part.Metrics...)
+		m.Metrics = tmpMetrics
+	}
+
+	return nil
 }
 
 type MetricData struct {
@@ -384,7 +399,6 @@ func (a *newRelicApi) req(path string, params string) ([]byte, error) {
 	pageCount := 1
 
 	for page := 1; page <= pageCount; page++ {
-		fmt.Println("page", page)
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, err
@@ -410,12 +424,13 @@ func (a *newRelicApi) req(path string, params string) ([]byte, error) {
 				return nil, err
 			}
 			pageCount, err = strconv.Atoi(u.Query().Get("page"))
-			fmt.Println("total pages:", pageCount)
 			if err != nil {
 				return nil, err
 			}
 		}
-		u.Query().Set("page", strconv.Itoa(page+1))
+		qry := req.URL.Query()
+		qry.Set("page", strconv.Itoa(page+1))
+		req.URL.RawQuery = qry.Encode()
 	}
 
 	return data, nil

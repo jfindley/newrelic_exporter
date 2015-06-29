@@ -84,8 +84,6 @@ func TestMetricNamesGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Error(names)
-
 	if len(names.Metrics) != 2 {
 		t.Fatal("Expected 2 name sets")
 	}
@@ -130,8 +128,8 @@ func TestMetricValuesGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(data.Metric_Data.Metrics) != 2 {
-		t.Fatal("Expected 2 metric sets")
+	if len(data.Metric_Data.Metrics) != 1 {
+		t.Fatal("Expected 1 metric sets")
 	}
 
 	if len(data.Metric_Data.Metrics[0].Timeslices) != 1 {
@@ -221,13 +219,7 @@ func testServer() (ts *httptest.Server, err error) {
 			}
 
 		case "/v2/applications/9045822/metrics/data.json":
-			if r.URL.Query().Get("page") == "2" {
-				sourceFile = ("_testing/metric_data_2.json")
-				w.Header().Set("Link", secondLink)
-			} else {
-				sourceFile = ("_testing/metric_data.json")
-				w.Header().Set("Link", firstLink)
-			}
+			sourceFile = ("_testing/metric_data.json")
 
 		default:
 			w.WriteHeader(404)
