@@ -314,18 +314,17 @@ func (e *Exporter) scrape(ch chan<- Metric) {
 func (e *Exporter) recieve(ch <-chan Metric) {
 
 	for metric := range ch {
-		id := fmt.Sprintf("%s_%s_%s", NameSpace, metric.App, metric.Name)
+		id := fmt.Sprintf("%s_%s", NameSpace, metric.Name)
 
 		if m, ok := e.metrics[id]; ok {
-			m.WithLabelValues(metric.Label).Set(metric.Value)
+			m.WithLabelValues(metric.App, metric.Label).Set(metric.Value)
 		} else {
 			g := prometheus.NewGaugeVec(
 				prometheus.GaugeOpts{
 					Namespace: NameSpace,
-					Subsystem: metric.App,
 					Name:      metric.Name,
 				},
-				[]string{"component"})
+				[]string{"app", "component"})
 
 			e.metrics[id] = *g
 		}
