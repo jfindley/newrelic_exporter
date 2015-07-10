@@ -21,10 +21,7 @@ func TestAppListGet(t *testing.T) {
 
 	defer ts.Close()
 
-	var api newRelicApi
-
-	api.server = ts.URL
-	api.apiKey = testApiKey
+        api := *NewNewRelicApi(ts.URL, testApiKey)
 
 	var app AppList
 
@@ -72,10 +69,7 @@ func TestMetricNamesGet(t *testing.T) {
 
 	defer ts.Close()
 
-	var api newRelicApi
-
-	api.server = ts.URL
-	api.apiKey = testApiKey
+        api := *NewNewRelicApi(ts.URL, testApiKey)
 
 	var names MetricNames
 
@@ -110,10 +104,7 @@ func TestMetricValuesGet(t *testing.T) {
 
 	defer ts.Close()
 
-	var api newRelicApi
-
-	api.server = ts.URL
-	api.apiKey = testApiKey
+        api := *NewNewRelicApi(ts.URL, testApiKey)
 
 	var data MetricData
 	var names MetricNames
@@ -162,11 +153,9 @@ func TestScrapeAPI(t *testing.T) {
 	defer ts.Close()
 
 	exporter := NewExporter()
+        exporter.api = *NewNewRelicApi(ts.URL, testApiKey)
 
 	var recieved []Metric
-
-	exporter.api.server = ts.URL
-	exporter.api.apiKey = testApiKey
 
 	metrics := make(chan Metric)
 

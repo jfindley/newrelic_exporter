@@ -368,19 +368,30 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 }
 
 type newRelicApi struct {
-	server string
+	server url.URL
 	apiKey string
 	from   time.Time
 	to     time.Time
 	period int
 }
 
+func NewNewRelicApi(server string, apikey string) *newRelicApi {
+	parsed, err := url.Parse(server)
+	if err != nil {
+		log.Fatal("Could not parse API URL: ", err)
+	}
+	if apikey == "" {
+		log.Fatal("Cannot continue without an API key.")
+	}
+	return &newRelicApi{
+		server: *parsed,
+		apiKey: apikey,
+	}
+}
+
 func (a *newRelicApi) req(path string, params string) ([]byte, error) {
 
-	u, err := url.Parse(a.server)
-	if err != nil {
-		return nil, err
-	}
+	u := a.server
 	u.Path = path
 	u.RawQuery = params
 
@@ -388,7 +399,7 @@ func (a *newRelicApi) req(path string, params string) ([]byte, error) {
 
 	req := &http.Request{
 		Method: "GET",
-		URL:    u,
+		URL:    &u,
 		Header: http.Header{
 			"User-Agent": {UserAgent},
 			"X-Api-Key":  {a.apiKey},
@@ -446,19 +457,22 @@ func (a *newRelicApi) req(path string, params string) ([]byte, error) {
 }
 
 func main() {
+	var server, apikey, listenAddress, metricPath string
+	var period int
 
-	exporter := NewExporter()
-
-	var listenAddress, metricPath string
-
-	flag.StringVar(&exporter.api.apiKey, "api.key", "", "NewRelic API key")
-	flag.StringVar(&exporter.api.server, "api.server", "https://api.newrelic.com", "NewRelic API URL")
-	flag.IntVar(&exporter.api.period, "api.period", 60, "Period of data to extract in seconds")
+	flag.StringVar(&apikey, "api.key", "", "NewRelic API key")
+	flag.StringVar(&server, "api.server", "https://api.newrelic.com", "NewRelic API URL")
+	flag.IntVar(&period, "api.period", 60, "Period of data to extract in seconds")
 
 	flag.StringVar(&listenAddress, "web.listen-address", ":9126", "Address to listen on for web interface and telemetry.")
 	flag.StringVar(&metricPath, "web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 
 	flag.Parse()
+
+	api := NewNewRelicApi(server, apikey)
+	api.period = period
+	exporter := NewExporter()
+	exporter.api = *api
 
 	prometheus.MustRegister(exporter)
 
