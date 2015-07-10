@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/log"
 )
 
 // Chunk size of metric requests
@@ -59,15 +60,15 @@ type AppList struct {
 }
 
 func (a *AppList) get(api newRelicApi) error {
-
+	log.Debugf("Requesting application list from %s.", api.server.String())
 	body, err := api.req("/v2/applications.json", "")
 	if err != nil {
+		log.Print("Error getting application list: ", err)
 		return err
 	}
 
 	err = json.Unmarshal(body, a)
 	return err
-
 }
 
 func (a *AppList) sendMetrics(ch chan<- Metric) {
@@ -100,11 +101,12 @@ type MetricNames struct {
 }
 
 func (m *MetricNames) get(api newRelicApi, appId int) error {
-
+	log.Debugf("Requesting metrics names for application id %d.", appId)
 	path := fmt.Sprintf("/v2/applications/%s/metrics.json", strconv.Itoa(appId))
 
 	body, err := api.req(path, "")
 	if err != nil {
+		log.Print("Error getting metric names: ", err)
 		return err
 	}
 
@@ -115,6 +117,7 @@ func (m *MetricNames) get(api newRelicApi, appId int) error {
 		if err = dec.Decode(&part); err == io.EOF {
 			break
 		} else if err != nil {
+			log.Print("Error decoding metric names: ", err)
 			return err
 		}
 		tmpMetrics := append(m.Metrics, part.Metrics...)
@@ -136,7 +139,6 @@ type MetricData struct {
 }
 
 func (m *MetricData) get(api newRelicApi, appId int, names MetricNames) error {
-
 	path := fmt.Sprintf("/v2/applications/%s/metrics/data.json", strconv.Itoa(appId))
 
 	var nameList []string
@@ -146,6 +148,7 @@ func (m *MetricData) get(api newRelicApi, appId int, names MetricNames) error {
 		// unencoded names which it cannot read
 		nameList = append(nameList, names.Metrics[i].Name)
 	}
+	log.Debugf("Requesting %d metrics for application id %d.", len(nameList), appId)
 
 	// Because the Go client does not yet support 100-continue
 	// ( see issue #3665 ),
@@ -184,12 +187,14 @@ func (m *MetricData) get(api newRelicApi, appId int, names MetricNames) error {
 
 			body, err := api.req(path, params.Encode())
 			if err != nil {
+				log.Print("Error requesting metrics: ", err)
 				close(ch)
 				return
 			}
 
 			err = json.Unmarshal(body, &data)
 			if err != nil {
+				log.Print("Error decoding metrics data: ", err)
 				close(ch)
 				return
 			}
@@ -272,6 +277,7 @@ func (e *Exporter) scrape(ch chan<- Metric) {
 	e.totalScrapes.Inc()
 
 	now := time.Now().UnixNano()
+	log.Debugf("Starting new scrape at %d.", now)
 
 	var apps AppList
 	err := apps.get(e.api)
@@ -378,6 +384,8 @@ func (a *newRelicApi) req(path string, params string) ([]byte, error) {
 	u.Path = path
 	u.RawQuery = params
 
+	log.Debug("Making API call: ", u.String())
+
 	req := &http.Request{
 		Method: "GET",
 		URL:    u,
@@ -466,6 +474,10 @@ func main() {
 `))
 	})
 
-	http.ListenAndServe(listenAddress, nil)
-
+	log.Printf("Listening on %s.", listenAddress)
+	err := http.ListenAndServe(listenAddress, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Print("HTTP server stopped.")
 }
