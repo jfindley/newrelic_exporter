@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -21,7 +22,14 @@ func TestAppListGet(t *testing.T) {
 
 	defer ts.Close()
 
-        api := *NewNewRelicApi(ts.URL, testApiKey)
+	api := NewNewRelicApi(ts.URL, testApiKey)
+	api.client = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: TlsIgnore,
+			},
+		},
+	}
 
 	var app AppList
 
@@ -31,7 +39,7 @@ func TestAppListGet(t *testing.T) {
 	}
 
 	if len(app.Applications) != 1 {
-		t.Fatal("Expected 1 application")
+		t.Fatal("Expected 1 application, got", len(app.Applications))
 	}
 
 	a := app.Applications[0]
@@ -69,7 +77,14 @@ func TestMetricNamesGet(t *testing.T) {
 
 	defer ts.Close()
 
-        api := *NewNewRelicApi(ts.URL, testApiKey)
+	api := NewNewRelicApi(ts.URL, testApiKey)
+	api.client = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: TlsIgnore,
+			},
+		},
+	}
 
 	var names MetricNames
 
@@ -79,7 +94,7 @@ func TestMetricNamesGet(t *testing.T) {
 	}
 
 	if len(names.Metrics) != 2 {
-		t.Fatal("Expected 2 name sets")
+		t.Fatal("Expected 2 name sets, got", len(names.Metrics))
 	}
 
 	if len(names.Metrics[0].Values) != 10 {
@@ -104,7 +119,14 @@ func TestMetricValuesGet(t *testing.T) {
 
 	defer ts.Close()
 
-        api := *NewNewRelicApi(ts.URL, testApiKey)
+	api := NewNewRelicApi(ts.URL, testApiKey)
+	api.client = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: TlsIgnore,
+			},
+		},
+	}
 
 	var data MetricData
 	var names MetricNames
@@ -153,7 +175,14 @@ func TestScrapeAPI(t *testing.T) {
 	defer ts.Close()
 
 	exporter := NewExporter()
-        exporter.api = *NewNewRelicApi(ts.URL, testApiKey)
+	exporter.api = NewNewRelicApi(ts.URL, testApiKey)
+	exporter.api.client = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: TlsIgnore,
+			},
+		},
+	}
 
 	var recieved []Metric
 
@@ -184,12 +213,12 @@ func testServer() (ts *httptest.Server, err error) {
 		var sourceFile string
 
 		firstLink := fmt.Sprintf(
-			"<https://%s%s?page=%d>; rel=%s, <https://%s%s?page=%d>; rel=%s",
+			"<%s%s?page=%d>; rel=%s, <%s%s?page=%d>; rel=%s",
 			ts.URL, r.URL.Path, 2, `"next"`,
 			ts.URL, r.URL.Path, 2, `"last"`)
 
 		secondLink := fmt.Sprintf(
-			"<https://%s%s?page=%d>; rel=%s, <https://%s%s?page=%d>; rel=%s",
+			"<%s%s?page=%d>; rel=%s, <%s%s?page=%d>; rel=%s",
 			ts.URL, r.URL.Path, 1, `"first"`,
 			ts.URL, r.URL.Path, 1, `"prev"`)
 

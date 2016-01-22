@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -35,7 +34,7 @@ const UserAgent = "NewRelic Exporter"
 var TlsIgnore bool = false
 
 // Regular expression to parse Link headers
-var rexp = `<([[:graph:]]+)>; rel="next", <([[:graph:]]+)>; rel="last"`
+var rexp = `<([[:graph:]]+)>; rel="next"`
 var LinkRexp *regexp.Regexp
 
 func init() {
@@ -59,7 +58,7 @@ type AppList struct {
 	}
 }
 
-func (a *AppList) get(api newRelicApi) error {
+func (a *AppList) get(api *newRelicApi) error {
 	log.Debugf("Requesting application list from %s.", api.server.String())
 	body, err := api.req("/v2/applications.json", "")
 	if err != nil {
@@ -100,7 +99,7 @@ type MetricNames struct {
 	}
 }
 
-func (m *MetricNames) get(api newRelicApi, appId int) error {
+func (m *MetricNames) get(api *newRelicApi, appId int) error {
 	log.Debugf("Requesting metrics names for application id %d.", appId)
 	path := fmt.Sprintf("/v2/applications/%s/metrics.json", strconv.Itoa(appId))
 
@@ -138,7 +137,7 @@ type MetricData struct {
 	}
 }
 
-func (m *MetricData) get(api newRelicApi, appId int, names MetricNames) error {
+func (m *MetricData) get(api *newRelicApi, appId int, names MetricNames) error {
 	path := fmt.Sprintf("/v2/applications/%s/metrics/data.json", strconv.Itoa(appId))
 
 	var nameList []string
@@ -247,7 +246,7 @@ type Exporter struct {
 	duration, error prometheus.Gauge
 	totalScrapes    prometheus.Counter
 	metrics         map[string]prometheus.GaugeVec
-	api             newRelicApi
+	api             *newRelicApi
 }
 
 func NewExporter() *Exporter {
@@ -372,6 +371,7 @@ type newRelicApi struct {
 	from   time.Time
 	to     time.Time
 	period int
+	client *http.Client
 }
 
 func NewNewRelicApi(server string, apikey string) *newRelicApi {
@@ -385,79 +385,69 @@ func NewNewRelicApi(server string, apikey string) *newRelicApi {
 	return &newRelicApi{
 		server: *parsed,
 		apiKey: apikey,
+		client: &http.Client{},
 	}
 }
 
 func (a *newRelicApi) req(path string, params string) ([]byte, error) {
 
-	u := a.server
-	u.Path = path
+	u, err := url.Parse(a.server.String() + path)
+	if err != nil {
+		return nil, err
+	}
 	u.RawQuery = params
 
 	log.Debug("Making API call: ", u.String())
 
 	req := &http.Request{
 		Method: "GET",
-		URL:    &u,
+		URL:    u,
 		Header: http.Header{
 			"User-Agent": {UserAgent},
 			"X-Api-Key":  {a.apiKey},
 		},
 	}
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: TlsIgnore,
-			},
-		},
-	}
-
 	var data []byte
-	pageCount := 1
 
-	for page := 1; page <= pageCount; page++ {
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, err
-		}
+	return a.httpget(req, data)
+}
 
-		if resp.StatusCode != 200 {
-			return nil, fmt.Errorf("Bad response code: %s", resp.Status)
-		}
-
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		resp.Body.Close()
-		data = append(data, body...)
-
-		link := resp.Header.Get("Link")
-		vals := LinkRexp.FindStringSubmatch(link)
-
-		if len(vals) == 3 { // Full string plus two sub-expressions
-			u, err := url.Parse(vals[2]) // Parse the second URL
-			if err != nil {
-				return nil, err
-			}
-			pageCount, err = strconv.Atoi(u.Query().Get("page"))
-			if err != nil {
-				return nil, err
-			}
-		}
-		qry := req.URL.Query()
-		qry.Set("page", strconv.Itoa(page+1))
-		req.URL.RawQuery = qry.Encode()
+func (a *newRelicApi) httpget(req *http.Request, in []byte) (out []byte, err error) {
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return
 	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+	out = append(in, body...)
 
-	return data, nil
+	// Read the link header to see if we need to read more pages.
+	link := resp.Header.Get("Link")
+	vals := LinkRexp.FindStringSubmatch(link)
 
+	if len(vals) == 2 {
+		// Regexp matched, read get next page
+
+		u := new(url.URL)
+
+		u, err = url.Parse(vals[1])
+		if err != nil {
+			return
+		}
+		req.URL = u
+		return a.httpget(req, out)
+	}
+	return
 }
 
 func main() {
 	var server, apikey, listenAddress, metricPath string
 	var period int
+	var err error
 
 	flag.StringVar(&apikey, "api.key", "", "NewRelic API key")
 	flag.StringVar(&server, "api.server", "https://api.newrelic.com", "NewRelic API URL")
@@ -471,7 +461,7 @@ func main() {
 	api := NewNewRelicApi(server, apikey)
 	api.period = period
 	exporter := NewExporter()
-	exporter.api = *api
+	exporter.api = api
 
 	prometheus.MustRegister(exporter)
 
@@ -488,7 +478,7 @@ func main() {
 	})
 
 	log.Printf("Listening on %s.", listenAddress)
-	err := http.ListenAndServe(listenAddress, nil)
+	err = http.ListenAndServe(listenAddress, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
