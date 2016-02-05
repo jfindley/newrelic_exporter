@@ -62,12 +62,26 @@ func (a *AppList) get(api *newRelicApi) error {
 	log.Debugf("Requesting application list from %s.", api.server.String())
 	body, err := api.req("/v2/applications.json", "")
 	if err != nil {
-		log.Print("Error getting application list: ", err)
+		log.Error("Error getting application list: ", err)
 		return err
 	}
 
-	err = json.Unmarshal(body, a)
-	return err
+	dec := json.NewDecoder(bytes.NewReader(body))
+	for {
+
+		page := new(AppList)
+		if err := dec.Decode(page); err == io.EOF {
+			break
+		} else if err != nil {
+			log.Error("Error decoding application list: ", err)
+			return err
+		}
+
+		a.Applications = append(a.Applications, page.Applications...)
+
+	}
+
+	return nil
 }
 
 func (a *AppList) sendMetrics(ch chan<- Metric) {
@@ -105,7 +119,7 @@ func (m *MetricNames) get(api *newRelicApi, appId int) error {
 
 	body, err := api.req(path, "")
 	if err != nil {
-		log.Print("Error getting metric names: ", err)
+		log.Error("Error getting metric names: ", err)
 		return err
 	}
 
@@ -116,7 +130,7 @@ func (m *MetricNames) get(api *newRelicApi, appId int) error {
 		if err = dec.Decode(&part); err == io.EOF {
 			break
 		} else if err != nil {
-			log.Print("Error decoding metric names: ", err)
+			log.Error("Error decoding metric names: ", err)
 			return err
 		}
 		tmpMetrics := append(m.Metrics, part.Metrics...)
@@ -186,16 +200,25 @@ func (m *MetricData) get(api *newRelicApi, appId int, names MetricNames) error {
 
 			body, err := api.req(path, params.Encode())
 			if err != nil {
-				log.Print("Error requesting metrics: ", err)
+				log.Error("Error requesting metrics: ", err)
 				close(ch)
 				return
 			}
 
-			err = json.Unmarshal(body, &data)
-			if err != nil {
-				log.Print("Error decoding metrics data: ", err)
-				close(ch)
-				return
+			dec := json.NewDecoder(bytes.NewReader(body))
+			for {
+
+				page := new(MetricData)
+				if err := dec.Decode(page); err == io.EOF {
+					break
+				} else if err != nil {
+					log.Error("Error decoding metrics data: ", err)
+					close(ch)
+					return
+				}
+
+				data.Metric_Data.Metrics = append(data.Metric_Data.Metrics, page.Metric_Data.Metrics...)
+
 			}
 
 			ch <- data
@@ -281,6 +304,7 @@ func (e *Exporter) scrape(ch chan<- Metric) {
 	var apps AppList
 	err := apps.get(e.api)
 	if err != nil {
+		log.Error(err)
 		e.error.Set(1)
 	}
 
