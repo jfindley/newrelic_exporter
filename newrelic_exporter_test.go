@@ -22,11 +22,11 @@ func TestAppListGet(t *testing.T) {
 
 	defer ts.Close()
 
-	api := NewNewRelicApi(ts.URL, testApiKey)
+	api := NewNewRelicAPI(ts.URL, testApiKey)
 	api.client = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: TlsIgnore,
+				InsecureSkipVerify: true,
 			},
 		},
 	}
@@ -46,7 +46,7 @@ func TestAppListGet(t *testing.T) {
 
 	switch {
 
-	case a.Id != testApiAppId:
+	case a.ID != testApiAppId:
 		t.Fatal("Wrong ID")
 
 	case a.Health != "green":
@@ -77,11 +77,11 @@ func TestMetricNamesGet(t *testing.T) {
 
 	defer ts.Close()
 
-	api := NewNewRelicApi(ts.URL, testApiKey)
+	api := NewNewRelicAPI(ts.URL, testApiKey)
 	api.client = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: TlsIgnore,
+				InsecureSkipVerify: true,
 			},
 		},
 	}
@@ -119,11 +119,11 @@ func TestMetricValuesGet(t *testing.T) {
 
 	defer ts.Close()
 
-	api := NewNewRelicApi(ts.URL, testApiKey)
+	api := NewNewRelicAPI(ts.URL, testApiKey)
 	api.client = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: TlsIgnore,
+				InsecureSkipVerify: true,
 			},
 		},
 	}
@@ -175,11 +175,11 @@ func TestScrapeAPI(t *testing.T) {
 	defer ts.Close()
 
 	exporter := NewExporter()
-	exporter.api = NewNewRelicApi(ts.URL, testApiKey)
+	exporter.api = NewNewRelicAPI(ts.URL, testApiKey)
 	exporter.api.client = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: TlsIgnore,
+				InsecureSkipVerify: true,
 			},
 		},
 	}
@@ -201,7 +201,6 @@ func TestScrapeAPI(t *testing.T) {
 }
 
 func testServer() (ts *httptest.Server, err error) {
-	TlsIgnore = true
 
 	ts = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 

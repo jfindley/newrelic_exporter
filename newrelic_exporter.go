@@ -29,10 +29,6 @@ const NameSpace = "newrelic"
 // User-Agent string
 const UserAgent = "NewRelic Exporter"
 
-// This is to support skipping verification for testing and
-// is deliberately not exposed to the user
-var TlsIgnore bool = false
-
 // Regular expression to parse Link headers
 var rexp = `<([[:graph:]]+)>; rel="next"`
 var LinkRexp *regexp.Regexp
@@ -50,7 +46,7 @@ type Metric struct {
 
 type AppList struct {
 	Applications []struct {
-		Id         int
+		ID         int
 		Name       string
 		Health     string             `json:"health_status"`
 		AppSummary map[string]float64 `json:"application_summary"`
@@ -58,7 +54,7 @@ type AppList struct {
 	}
 }
 
-func (a *AppList) get(api *newRelicApi) error {
+func (a *AppList) get(api *newRelicAPI) error {
 	log.Debugf("Requesting application list from %s.", api.server.String())
 	body, err := api.req("/v2/applications.json", "")
 	if err != nil {
@@ -113,9 +109,9 @@ type MetricNames struct {
 	}
 }
 
-func (m *MetricNames) get(api *newRelicApi, appId int) error {
-	log.Debugf("Requesting metrics names for application id %d.", appId)
-	path := fmt.Sprintf("/v2/applications/%s/metrics.json", strconv.Itoa(appId))
+func (m *MetricNames) get(api *newRelicAPI, appID int) error {
+	log.Debugf("Requesting metrics names for application id %d.", appID)
+	path := fmt.Sprintf("/v2/applications/%s/metrics.json", strconv.Itoa(appID))
 
 	body, err := api.req(path, "")
 	if err != nil {
@@ -151,8 +147,8 @@ type MetricData struct {
 	}
 }
 
-func (m *MetricData) get(api *newRelicApi, appId int, names MetricNames) error {
-	path := fmt.Sprintf("/v2/applications/%s/metrics/data.json", strconv.Itoa(appId))
+func (m *MetricData) get(api *newRelicAPI, appID int, names MetricNames) error {
+	path := fmt.Sprintf("/v2/applications/%s/metrics/data.json", strconv.Itoa(appID))
 
 	var nameList []string
 
@@ -161,7 +157,7 @@ func (m *MetricData) get(api *newRelicApi, appId int, names MetricNames) error {
 		// unencoded names which it cannot read
 		nameList = append(nameList, names.Metrics[i].Name)
 	}
-	log.Debugf("Requesting %d metrics for application id %d.", len(nameList), appId)
+	log.Debugf("Requesting %d metrics for application id %d.", len(nameList), appID)
 
 	// Because the Go client does not yet support 100-continue
 	// ( see issue #3665 ),
@@ -269,7 +265,7 @@ type Exporter struct {
 	duration, error prometheus.Gauge
 	totalScrapes    prometheus.Counter
 	metrics         map[string]prometheus.GaugeVec
-	api             *newRelicApi
+	api             *newRelicAPI
 }
 
 func NewExporter() *Exporter {
@@ -324,7 +320,7 @@ func (e *Exporter) scrape(ch chan<- Metric) {
 			defer wg.Done()
 			var names MetricNames
 
-			err = names.get(api, app.Id)
+			err = names.get(api, app.ID)
 			if err != nil {
 				log.Error(err)
 				e.error.Set(1)
@@ -332,7 +328,7 @@ func (e *Exporter) scrape(ch chan<- Metric) {
 
 			var data MetricData
 
-			err = data.get(api, app.Id, names)
+			err = data.get(api, app.ID, names)
 			if err != nil {
 				log.Error(err)
 				e.error.Set(1)
@@ -406,7 +402,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 
 }
 
-type newRelicApi struct {
+type newRelicAPI struct {
 	server url.URL
 	apiKey string
 	from   time.Time
@@ -415,7 +411,7 @@ type newRelicApi struct {
 	client *http.Client
 }
 
-func NewNewRelicApi(server string, apikey string) *newRelicApi {
+func NewNewRelicAPI(server string, apikey string) *newRelicAPI {
 	parsed, err := url.Parse(server)
 	if err != nil {
 		log.Fatal("Could not parse API URL: ", err)
@@ -423,14 +419,14 @@ func NewNewRelicApi(server string, apikey string) *newRelicApi {
 	if apikey == "" {
 		log.Fatal("Cannot continue without an API key.")
 	}
-	return &newRelicApi{
+	return &newRelicAPI{
 		server: *parsed,
 		apiKey: apikey,
 		client: &http.Client{},
 	}
 }
 
-func (a *newRelicApi) req(path string, params string) ([]byte, error) {
+func (a *newRelicAPI) req(path string, params string) ([]byte, error) {
 
 	u, err := url.Parse(a.server.String() + path)
 	if err != nil {
@@ -454,7 +450,7 @@ func (a *newRelicApi) req(path string, params string) ([]byte, error) {
 	return a.httpget(req, data)
 }
 
-func (a *newRelicApi) httpget(req *http.Request, in []byte) (out []byte, err error) {
+func (a *newRelicAPI) httpget(req *http.Request, in []byte) (out []byte, err error) {
 	resp, err := a.client.Do(req)
 	if err != nil {
 		return
@@ -500,7 +496,7 @@ func main() {
 
 	flag.Parse()
 
-	api := NewNewRelicApi(server, apikey)
+	api := NewNewRelicAPI(server, apikey)
 	api.period = period
 	exporter := NewExporter()
 	exporter.api = api
