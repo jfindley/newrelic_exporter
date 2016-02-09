@@ -312,16 +312,19 @@ func (e *Exporter) scrape(ch chan<- Metric) {
 
 	var wg sync.WaitGroup
 
-	for _, app := range apps.Applications {
+	for i := range apps.Applications {
+
+		app := apps.Applications[i]
 
 		wg.Add(1)
+		api := e.api
 
 		go func() {
 
 			defer wg.Done()
 			var names MetricNames
 
-			err = names.get(e.api, app.Id)
+			err = names.get(api, app.Id)
 			if err != nil {
 				log.Error(err)
 				e.error.Set(1)
@@ -329,7 +332,7 @@ func (e *Exporter) scrape(ch chan<- Metric) {
 
 			var data MetricData
 
-			err = data.get(e.api, app.Id, names)
+			err = data.get(api, app.Id, names)
 			if err != nil {
 				log.Error(err)
 				e.error.Set(1)
@@ -400,6 +403,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	for _, m := range e.metrics {
 		m.Collect(ch)
 	}
+
 }
 
 type newRelicApi struct {
@@ -455,11 +459,12 @@ func (a *newRelicApi) httpget(req *http.Request, in []byte) (out []byte, err err
 	if err != nil {
 		return
 	}
-	defer resp.Body.Close()
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
+	resp.Body.Close()
 	out = append(in, body...)
 
 	// Read the link header to see if we need to read more pages.
