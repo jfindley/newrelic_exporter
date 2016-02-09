@@ -310,25 +310,38 @@ func (e *Exporter) scrape(ch chan<- Metric) {
 
 	apps.sendMetrics(ch)
 
+	var wg sync.WaitGroup
+
 	for _, app := range apps.Applications {
 
-		var names MetricNames
+		wg.Add(1)
 
-		err = names.get(e.api, app.Id)
-		if err != nil {
-			e.error.Set(1)
-		}
+		go func() {
 
-		var data MetricData
+			defer wg.Done()
+			var names MetricNames
 
-		err = data.get(e.api, app.Id, names)
-		if err != nil {
-			e.error.Set(1)
-		}
+			err = names.get(e.api, app.Id)
+			if err != nil {
+				log.Error(err)
+				e.error.Set(1)
+			}
 
-		data.sendMetrics(ch, app.Name)
+			var data MetricData
+
+			err = data.get(e.api, app.Id, names)
+			if err != nil {
+				log.Error(err)
+				e.error.Set(1)
+			}
+
+			data.sendMetrics(ch, app.Name)
+
+		}()
 
 	}
+
+	wg.Wait()
 
 	close(ch)
 	e.duration.Set(float64(time.Now().UnixNano()-now) / 1000000000)
