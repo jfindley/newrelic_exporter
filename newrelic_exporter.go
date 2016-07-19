@@ -184,7 +184,7 @@ func (m *MetricData) get(api *newRelicAPI, appID int, names MetricNames) error {
 
 			params := url.Values{}
 
-			for _, thisName := range thisList {
+			for _, thisName := range names {
 				params.Add("names[]", thisName)
 			}
 
@@ -403,15 +403,16 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 }
 
 type newRelicAPI struct {
-	server url.URL
-	apiKey string
-	from   time.Time
-	to     time.Time
-	period int
-	client *http.Client
+	server          url.URL
+	apiKey          string
+	from            time.Time
+	to              time.Time
+	period          int
+	unreportingApps bool
+	client          *http.Client
 }
 
-func NewNewRelicAPI(server string, apikey string) *newRelicAPI {
+func NewNewRelicAPI(server string, apikey string, timeout time.Duration) *newRelicAPI {
 	parsed, err := url.Parse(server)
 	if err != nil {
 		log.Fatal("Could not parse API URL: ", err)
@@ -422,7 +423,7 @@ func NewNewRelicAPI(server string, apikey string) *newRelicAPI {
 	return &newRelicAPI{
 		server: *parsed,
 		apiKey: apikey,
-		client: &http.Client{},
+		client: &http.Client{Timeout: timeout},
 	}
 }
 
@@ -485,18 +486,20 @@ func (a *newRelicAPI) httpget(req *http.Request, in []byte) (out []byte, err err
 func main() {
 	var server, apikey, listenAddress, metricPath string
 	var period int
+	var timeout time.Duration
 	var err error
 
 	flag.StringVar(&apikey, "api.key", "", "NewRelic API key")
 	flag.StringVar(&server, "api.server", "https://api.newrelic.com", "NewRelic API URL")
 	flag.IntVar(&period, "api.period", 60, "Period of data to extract in seconds")
+	flag.DurationVar(&timeout, "api.timeout", 5*time.Second, "Period of time to wait for an API response in seconds")
 
 	flag.StringVar(&listenAddress, "web.listen-address", ":9126", "Address to listen on for web interface and telemetry.")
 	flag.StringVar(&metricPath, "web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 
 	flag.Parse()
 
-	api := NewNewRelicAPI(server, apikey)
+	api := NewNewRelicAPI(server, apikey, timeout)
 	api.period = period
 	exporter := NewExporter()
 	exporter.api = api

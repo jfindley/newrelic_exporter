@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 var testApiKey string = "205071e37e95bdaa327c62ccd3201da9289ccd17"
 var testApiAppId int = 9045822
+var testTimeout time.Duration = 5 * time.Second
 var testPostData string = "names[]=Datastore%2Fstatement%2FJDBC%2Fmessages%2Finsert&raw=true&summarize=true&period=0&from=0001-01-01T00:00:00Z&to=0001-01-01T00:00:00Z"
 
 func TestAppListGet(t *testing.T) {
@@ -22,8 +24,9 @@ func TestAppListGet(t *testing.T) {
 
 	defer ts.Close()
 
-	api := NewNewRelicAPI(ts.URL, testApiKey)
+	api := NewNewRelicAPI(ts.URL, testApiKey, testTimeout)
 	api.client = &http.Client{
+		Timeout: testTimeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
@@ -77,8 +80,9 @@ func TestMetricNamesGet(t *testing.T) {
 
 	defer ts.Close()
 
-	api := NewNewRelicAPI(ts.URL, testApiKey)
+	api := NewNewRelicAPI(ts.URL, testApiKey, testTimeout)
 	api.client = &http.Client{
+		Timeout: testTimeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
@@ -119,8 +123,9 @@ func TestMetricValuesGet(t *testing.T) {
 
 	defer ts.Close()
 
-	api := NewNewRelicAPI(ts.URL, testApiKey)
+	api := NewNewRelicAPI(ts.URL, testApiKey, testTimeout)
 	api.client = &http.Client{
+		Timeout: testTimeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
@@ -175,8 +180,9 @@ func TestScrapeAPI(t *testing.T) {
 	defer ts.Close()
 
 	exporter := NewExporter()
-	exporter.api = NewNewRelicAPI(ts.URL, testApiKey)
+	exporter.api = NewNewRelicAPI(ts.URL, testApiKey, testTimeout)
 	exporter.api.client = &http.Client{
+		Timeout: testTimeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
