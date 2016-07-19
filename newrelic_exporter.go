@@ -383,7 +383,10 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	e.api.to = time.Now().UTC()
+	// Align requests to minute boundary.
+	// As time.Round rounds to the nearest integar rather than floor or ceil,
+	// subtract 30 seconds from the time before rounding.
+	e.api.to = time.Now().Add(-time.Second * 30).Round(time.Minute).UTC()
 	e.api.from = e.api.to.Add(-time.Duration(e.api.period) * time.Second)
 
 	metricChan := make(chan Metric)
