@@ -3,7 +3,7 @@ FROM debian
 COPY . /src
 
 RUN apt-get update \
-  && apt-get install -y curl make git mercurial \ 
+  && apt-get install -y curl make git mercurial \
   && cd /src \
   && make \
   && apt-get purge -y curl make git mercurial \
@@ -13,4 +13,4 @@ RUN apt-get update \
 
 EXPOSE 9126
 
-CMD ["/src/newrelic_exporter"]
+ENTRYPOINT ["/src/newrelic_exporter"]
