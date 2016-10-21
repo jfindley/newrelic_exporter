@@ -7,7 +7,7 @@ Requires a New Relic account.
 
 ### Running in a container
 
-	docker run jfindley/newrelic-exporter
+	docker run jfindley/newrelic-exporter --api.key=********
 
 ### From source
 
